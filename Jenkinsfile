@@ -133,13 +133,13 @@ pipeline {
                                     --region=${env.DATAPROC_REGION} \
                                     --project=${env.GCP_PROJECT} \
                                     --jar=file:///usr/lib/hadoop/hadoop-streaming.jar \
+                                    --format='value(reference.jobId)' \
                                     -- \
                                     -files gs://${env.DATAPROC_STAGING_BUCKET}/scripts/mapper.py,gs://${env.DATAPROC_STAGING_BUCKET}/scripts/reducer.py \
                                     -mapper  "python3 mapper.py" \
                                     -reducer "python3 reducer.py" \
                                     -input   "gs://${env.HADOOP_INPUT_BUCKET}/input/" \
-                                    -output  "gs://${env.HADOOP_OUTPUT_BUCKET}/${OUTPUT_PATH}" \
-                                    --format='value(reference.jobId)'
+                                    -output  "gs://${env.HADOOP_OUTPUT_BUCKET}/${OUTPUT_PATH}"
                             """,
                             returnStdout: true
                         ).trim()
