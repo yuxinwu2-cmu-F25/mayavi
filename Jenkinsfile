@@ -19,18 +19,9 @@ pipeline {
     }
 
     environment {
-        // Injected from the `pipeline-env` Kubernetes secret (see Terraform)
-        GCP_PROJECT          = "${env.GCP_PROJECT}"
-        DATAPROC_CLUSTER     = "${env.DATAPROC_CLUSTER}"
-        DATAPROC_REGION      = "${env.DATAPROC_REGION}"
-        HADOOP_INPUT_BUCKET  = "${env.HADOOP_INPUT_BUCKET}"
-        HADOOP_OUTPUT_BUCKET = "${env.HADOOP_OUTPUT_BUCKET}"
-        DATAPROC_STAGING     = "${env.DATAPROC_STAGING_BUCKET}"
-        GITHUB_USERNAME      = "${env.GITHUB_USERNAME}"
-
-        // Build-unique output path so successive runs don't clash
-        OUTPUT_PATH          = "output/build-${env.BUILD_NUMBER}"
-        REPO_DIR             = "/tmp/mayavi-${env.BUILD_NUMBER}"
+        // Build-unique paths (computed here; all other vars read via env.VAR at use-site)
+        OUTPUT_PATH = "output/build-${env.BUILD_NUMBER}"
+        REPO_DIR    = "/tmp/mayavi-${env.BUILD_NUMBER}"
     }
 
     stages {
@@ -41,7 +32,7 @@ pipeline {
                 container('gcloud') {
                     sh """
                         git clone --depth 1 \
-                            https://github.com/${GITHUB_USERNAME}/mayavi.git \
+                            https://github.com/${env.GITHUB_USERNAME}/mayavi.git \
                             ${REPO_DIR}
                     """
                 }
@@ -81,8 +72,7 @@ pipeline {
                             def response = sh(
                                 script: """
                                     curl -sf -u "${sonarToken}:" \
-                                        "${sonarHostUrl}/api/issues/search?\
-projectKeys=mayavi&types=BUG,VULNERABILITY,CODE_SMELL&severities=BLOCKER&resolved=false&ps=1"
+                                        "${sonarHostUrl}/api/issues/search?projectKeys=mayavi&types=BUG,VULNERABILITY,CODE_SMELL&severities=BLOCKER&resolved=false&ps=1"
                                 """,
                                 returnStdout: true
                             ).trim()
@@ -95,8 +85,6 @@ projectKeys=mayavi&types=BUG,VULNERABILITY,CODE_SMELL&severities=BLOCKER&resolve
                                 echo "║  BLOCKER issues found: ${blockerCount}              ║"
                                 echo "║  Hadoop job will NOT run.                    ║"
                                 echo "╚══════════════════════════════════════════════╝"
-                                // Mark build unstable so it's visible, but don't error—
-                                // the next stage is skipped via the `when` directive.
                                 currentBuild.result = 'UNSTABLE'
                                 env.HAS_BLOCKERS = 'true'
                             } else {
@@ -118,8 +106,8 @@ projectKeys=mayavi&types=BUG,VULNERABILITY,CODE_SMELL&severities=BLOCKER&resolve
                 container('gcloud') {
                     sh """
                         # Clear previous input and upload fresh copy
-                        gsutil -q rm -rf gs://${HADOOP_INPUT_BUCKET}/input/ || true
-                        gsutil -m cp -r ${REPO_DIR}/* gs://${HADOOP_INPUT_BUCKET}/input/
+                        gsutil -q rm -rf gs://${env.HADOOP_INPUT_BUCKET}/input/ || true
+                        gsutil -m cp -r ${REPO_DIR}/* gs://${env.HADOOP_INPUT_BUCKET}/input/
                     """
                 }
             }
@@ -135,22 +123,22 @@ projectKeys=mayavi&types=BUG,VULNERABILITY,CODE_SMELL&severities=BLOCKER&resolve
                     script {
                         // Remove previous output so Hadoop doesn't complain
                         sh """
-                            gsutil -q rm -rf gs://${HADOOP_OUTPUT_BUCKET}/${OUTPUT_PATH}/ || true
+                            gsutil -q rm -rf gs://${env.HADOOP_OUTPUT_BUCKET}/${OUTPUT_PATH}/ || true
                         """
 
                         def jobId = sh(
                             script: """
                                 gcloud dataproc jobs submit hadoop \
-                                    --cluster=${DATAPROC_CLUSTER} \
-                                    --region=${DATAPROC_REGION} \
-                                    --project=${GCP_PROJECT} \
+                                    --cluster=${env.DATAPROC_CLUSTER} \
+                                    --region=${env.DATAPROC_REGION} \
+                                    --project=${env.GCP_PROJECT} \
                                     --jar=file:///usr/lib/hadoop/hadoop-streaming.jar \
                                     -- \
-                                    -files gs://${DATAPROC_STAGING}/scripts/mapper.py,gs://${DATAPROC_STAGING}/scripts/reducer.py \
+                                    -files gs://${env.DATAPROC_STAGING_BUCKET}/scripts/mapper.py,gs://${env.DATAPROC_STAGING_BUCKET}/scripts/reducer.py \
                                     -mapper  "python3 mapper.py" \
                                     -reducer "python3 reducer.py" \
-                                    -input   "gs://${HADOOP_INPUT_BUCKET}/input/" \
-                                    -output  "gs://${HADOOP_OUTPUT_BUCKET}/${OUTPUT_PATH}" \
+                                    -input   "gs://${env.HADOOP_INPUT_BUCKET}/input/" \
+                                    -output  "gs://${env.HADOOP_OUTPUT_BUCKET}/${OUTPUT_PATH}" \
                                     --format='value(reference.jobId)'
                             """,
                             returnStdout: true
@@ -176,11 +164,11 @@ projectKeys=mayavi&types=BUG,VULNERABILITY,CODE_SMELL&severities=BLOCKER&resolve
                         echo "════════════════════════════════════════"
 
                         # Merge and print all output parts
-                        gsutil cat "gs://${HADOOP_OUTPUT_BUCKET}/${OUTPUT_PATH}/part-*"
+                        gsutil cat "gs://${env.HADOOP_OUTPUT_BUCKET}/${OUTPUT_PATH}/part-*"
 
                         echo "════════════════════════════════════════"
                         echo "  Full output stored at:"
-                        echo "  gs://${HADOOP_OUTPUT_BUCKET}/${OUTPUT_PATH}/"
+                        echo "  gs://${env.HADOOP_OUTPUT_BUCKET}/${OUTPUT_PATH}/"
                         echo "════════════════════════════════════════"
                     """
                 }
@@ -201,7 +189,7 @@ projectKeys=mayavi&types=BUG,VULNERABILITY,CODE_SMELL&severities=BLOCKER&resolve
         }
         always {
             // Clean up local clone to free pod storage
-            sh "rm -rf ${REPO_DIR} || true"
+            sh "rm -rf ${env.REPO_DIR} || true"
         }
     }
 }
