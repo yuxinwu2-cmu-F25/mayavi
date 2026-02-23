@@ -21,7 +21,7 @@ pipeline {
     environment {
         // Build-unique paths (computed here; all other vars read via env.VAR at use-site)
         OUTPUT_PATH = "output/build-${env.BUILD_NUMBER}"
-        REPO_DIR    = "/tmp/mayavi-${env.BUILD_NUMBER}"
+        REPO_DIR    = "${env.WORKSPACE}/mayavi-src"
     }
 
     stages {
