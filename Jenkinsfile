@@ -135,6 +135,7 @@ pipeline {
                                     --jar=file:///usr/lib/hadoop/hadoop-streaming.jar \
                                     --format='value(reference.jobId)' \
                                     -- \
+                                    -D mapreduce.input.fileinputformat.input.dir.recursive=true \
                                     -files gs://${env.DATAPROC_STAGING_BUCKET}/scripts/mapper.py,gs://${env.DATAPROC_STAGING_BUCKET}/scripts/reducer.py \
                                     -mapper  "python3 mapper.py" \
                                     -reducer "python3 reducer.py" \
