@@ -45,13 +45,14 @@ pipeline {
                 container('sonar-scanner') {
                     withSonarQubeEnv('SonarQube') {
                         sh """
-                            cd ${REPO_DIR}
                             sonar-scanner \
                                 -Dsonar.projectKey=mayavi \
                                 -Dsonar.projectName='Mayavi' \
+                                -Dsonar.projectBaseDir=${REPO_DIR} \
                                 -Dsonar.sources=. \
                                 -Dsonar.inclusions='**/*.py' \
-                                -Dsonar.python.version=3
+                                -Dsonar.python.version=3 \
+                                -Dsonar.working.directory=${WORKSPACE}/.scannerwork
                         """
                     }
                 }
